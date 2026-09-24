@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -20,296 +19,507 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
 class CategoryRestControllerTest {
 
     private MockMvc mockMvc;
 
-    ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
-    CategoryRestController categoryRestController;
+    private CategoryRestController controller;
 
     @Mock
     private ICategoryService service;
 
-    List<Category> list = new ArrayList<Category>();
+    private List<Category> list;
 
     @BeforeEach
     void setUp() {
-        // Initialize mocks before each test
-        //MockitoAnnotations.openMocks(this);
-        this.mockMvc = MockMvcBuilders.standaloneSetup(categoryRestController).build();
-        this.chargeList();
+        mockMvc = MockMvcBuilders
+                .standaloneSetup(controller)
+                .build();
+
+        list = new ArrayList<>();
+
+        list.add(createCategory(
+                1L,
+                "Abarrotes",
+                "Distintos tipos de abarrotes"
+        ));
+
+        list.add(createCategory(
+                2L,
+                "Lacteos",
+                "Distintos tipos de lacteos"
+        ));
     }
 
-    /**
-     * Test para probar controlador de obtener todas las categorias
-     */
+    // =========================
+    // GET ALL
+    // =========================
+
     @Test
-    void testSearchCategories() throws Exception {
-        // Given
-        CategoryResponseRest categoryResponseRest = new CategoryResponseRest();
-        categoryResponseRest.getCategoryResponse().setCategory(list);
-        categoryResponseRest.setMetadata("Respuesta ok", "00", "Respuesta exitosa");
+    void searchCategories_success() throws Exception {
 
-        when(service.search()).thenReturn(new ResponseEntity<CategoryResponseRest>(categoryResponseRest, HttpStatus.OK));
+        CategoryResponseRest body = responseWith(list);
+        body.setMetadata(
+                "Respuesta ok",
+                "00",
+                "Respuesta exitosa"
+        );
 
-        // When
-        this.mockMvc.perform(get("/api/v1/categories")
-                // Then
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON))
+        when(service.search())
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.OK
+                        )
+                );
+
+        mockMvc.perform(
+                        get("/api/v1/categories")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.APPLICATION_JSON)
+                )
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.categoryResponse").exists())
-                .andExpect(jsonPath("$.categoryResponse.category[0].name").value("Abarrotes"))
-                .andExpect(status().isOk());
+                .andExpect(
+                        jsonPath(
+                                "$.categoryResponse.category.length()"
+                        ).value(2)
+                )
+                .andExpect(
+                        jsonPath(
+                                "$.categoryResponse.category[0].name"
+                        ).value("Abarrotes")
+                );
+
+        verify(service, times(1)).search();
     }
 
-    /**
-     * Test para probar error en controlador de obtener todas las categorias
-     */
     @Test
-    void testSearchCategoriesError() throws Exception {
-        // Given
-        CategoryResponseRest categoryResponseRest = new CategoryResponseRest();
-        categoryResponseRest.setMetadata("Error", "01", "Error al consultar categorias");
+    void searchCategories_error() throws Exception {
 
-        when(service.search()).thenReturn(
-                new ResponseEntity<CategoryResponseRest>(categoryResponseRest, HttpStatus.INTERNAL_SERVER_ERROR));
+        CategoryResponseRest body =
+                new CategoryResponseRest();
 
-        // When
-        this.mockMvc.perform(get("/api/v1/categories")
-            // Then)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.metadata").exists())
+        body.setMetadata(
+                "Respuesta nok",
+                "-1",
+                "Error al consultar"
+        );
+
+        when(service.search())
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.INTERNAL_SERVER_ERROR
+                        )
+                );
+
+        mockMvc.perform(
+                        get("/api/v1/categories")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.APPLICATION_JSON)
+                )
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.metadata").exists());
+
+        verify(service, times(1)).search();
+    }
+
+    // =========================
+    // GET BY ID
+    // =========================
+
+    @Test
+    void searchCategoriesById_success() throws Exception {
+
+        CategoryResponseRest body =
+                responseWith(List.of(list.get(0)));
+
+        body.setMetadata(
+                "Respuesta ok",
+                "00",
+                "Categoria encontrada"
+        );
+
+        when(service.searchById(1L))
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.OK
+                        )
+                );
+
+        mockMvc.perform(
+                        get("/api/v1/categories/{id}", 1L)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.APPLICATION_JSON)
+                )
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath(
+                                "$.categoryResponse.category[0].name"
+                        ).value("Abarrotes")
+                );
+
+        verify(service).searchById(1L);
+    }
+
+    @Test
+    void searchCategoriesById_notFound() throws Exception {
+
+        CategoryResponseRest body =
+                new CategoryResponseRest();
+
+        body.setMetadata(
+                "Respuesta nok",
+                "-1",
+                "Categoria no encontrada"
+        );
+
+        when(service.searchById(99L))
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.NOT_FOUND
+                        )
+                );
+
+        mockMvc.perform(
+                        get("/api/v1/categories/{id}", 99L)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.APPLICATION_JSON)
+                )
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.metadata").exists());
+
+        verify(service).searchById(99L);
+    }
+
+    // =========================
+    // SAVE
+    // =========================
+
+    @Test
+    void save_success() throws Exception {
+
+        Category category =
+                createCategory(
+                        3L,
+                        "Bebidas",
+                        "Distintos tipos de bebidas"
+                );
+
+        CategoryResponseRest body =
+                responseWith(List.of(category));
+
+        body.setMetadata(
+                "Respuesta ok",
+                "00",
+                "Categoria guardada"
+        );
+
+        when(service.save(category))
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.OK
+                        )
+                );
+
+        mockMvc.perform(
+                        post("/api/v1/categories")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(
+                                                category
+                                        )
+                                )
+                                .accept(MediaType.APPLICATION_JSON)
+                )
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath(
+                                "$.categoryResponse.category[0].name"
+                        ).value("Bebidas")
+                );
+
+        verify(service).save(category);
+    }
+
+    @Test
+    void save_error() throws Exception {
+
+        Category category =
+                createCategory(
+                        3L,
+                        "Bebidas",
+                        "Distintos tipos de bebidas"
+                );
+
+        CategoryResponseRest body =
+                new CategoryResponseRest();
+
+        body.setMetadata(
+                "Respuesta nok",
+                "-1",
+                "Categoria no guardada"
+        );
+
+        when(service.save(category))
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.BAD_REQUEST
+                        )
+                );
+
+        mockMvc.perform(
+                        post("/api/v1/categories")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(
+                                                category
+                                        )
+                                )
+                                .accept(MediaType.APPLICATION_JSON)
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.metadata").exists());
+
+        verify(service).save(category);
+    }
+
+    // =========================
+    // UPDATE
+    // =========================
+
+    @Test
+    void update_success() throws Exception {
+
+        Category category =
+                createCategory(
+                        1L,
+                        "Abarrotes Actualizado",
+                        "Descripcion actualizada"
+                );
+
+        CategoryResponseRest body =
+                responseWith(List.of(category));
+
+        body.setMetadata(
+                "Respuesta ok",
+                "00",
+                "Categoria actualizada"
+        );
+
+        when(service.update(category, 1L))
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.OK
+                        )
+                );
+
+        mockMvc.perform(
+                        put("/api/v1/categories/{id}", 1L)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(
+                                                category
+                                        )
+                                )
+                                .accept(MediaType.APPLICATION_JSON)
+                )
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath(
+                                "$.categoryResponse.category[0].name"
+                        ).value("Abarrotes Actualizado")
+                );
+
+        verify(service).update(category, 1L);
+    }
+
+    @Test
+    void update_error() throws Exception {
+
+        Category category =
+                createCategory(
+                        1L,
+                        "Actualizada",
+                        "Descripcion"
+                );
+
+        CategoryResponseRest body =
+                new CategoryResponseRest();
+
+        body.setMetadata(
+                "Respuesta nok",
+                "-1",
+                "Error al actualizar"
+        );
+
+        when(service.update(category, 1L))
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.INTERNAL_SERVER_ERROR
+                        )
+                );
+
+        mockMvc.perform(
+                        put("/api/v1/categories/{id}", 1L)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(
+                                                category
+                                        )
+                                )
+                )
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.metadata").exists());
+
+        verify(service).update(category, 1L);
+    }
+
+    // =========================
+    // DELETE
+    // =========================
+
+    @Test
+    void delete_success() throws Exception {
+
+        CategoryResponseRest body =
+                new CategoryResponseRest();
+
+        body.setMetadata(
+                "respuesta ok",
+                "00",
+                "Registro eliminado"
+        );
+
+        when(service.deleteById(1L))
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.OK
+                        )
+                );
+
+        mockMvc.perform(
+                        delete("/api/v1/categories/{id}", 1L)
+                                .accept(MediaType.APPLICATION_JSON)
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.metadata").exists());
+
+        verify(service).deleteById(1L);
+    }
+
+    @Test
+    void delete_error() throws Exception {
+
+        CategoryResponseRest body =
+                new CategoryResponseRest();
+
+        body.setMetadata(
+                "Respuesta nok",
+                "-1",
+                "Error al eliminar"
+        );
+
+        when(service.deleteById(1L))
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.INTERNAL_SERVER_ERROR
+                        )
+                );
+
+        mockMvc.perform(
+                        delete("/api/v1/categories/{id}", 1L)
+                                .accept(MediaType.APPLICATION_JSON)
+                )
                 .andExpect(status().isInternalServerError());
+
+        verify(service).deleteById(1L);
     }
 
-    /**
-     * Test para probar controlador de obtener categoria por id
-     */
+    // =========================
+    // EXPORT EXCEL
+    // =========================
+
     @Test
-    void testSearchCategoriesById() throws Exception {
-        // Given
-        Long id = 1L;
-        Category category = list.get(0);
-        CategoryResponseRest categoryResponseRest = new CategoryResponseRest();
-        categoryResponseRest.getCategoryResponse().setCategory(List.of(category));
-        categoryResponseRest.setMetadata("Respuesta ok", "00", "Respuesta exitosa");
+    void exportToExcel_success() throws Exception {
 
-        when(service.searchById(id)).thenReturn(new ResponseEntity<CategoryResponseRest>(categoryResponseRest, HttpStatus.OK));
+        CategoryResponseRest body =
+                responseWith(list);
 
-        // When
-        this.mockMvc.perform(get("/api/v1/categories/{id}", id)
-                // Then
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.categoryResponse").exists())
-                .andExpect(jsonPath("$.categoryResponse.category[0].name").value("Abarrotes"))
-                .andExpect(status().isOk());
+        when(service.search())
+                .thenReturn(
+                        new ResponseEntity<>(
+                                body,
+                                HttpStatus.OK
+                        )
+                );
+
+        mockMvc.perform(
+                        get("/api/v1/categories/export/excel")
+                )
+                .andExpect(status().isOk())
+                .andExpect(
+                        header().string(
+                                "Content-Disposition",
+                                "attachment; filename=result_category.xlsx"
+                        )
+                )
+                .andExpect(
+                        content().contentType(
+                                "application/octet-stream"
+                        )
+                )
+                .andExpect(result ->
+                        assertTrue(
+                                result.getResponse()
+                                        .getContentAsByteArray()
+                                        .length > 0
+                        )
+                );
+
+        verify(service).search();
     }
 
-    /**
-     * Test para probar error en controlador de obtener categoria por id
-     */
-    @Test
-    void testSearchCategoriesByIdError() throws Exception {
-        // Given
-        Long id = 1L;
-        CategoryResponseRest categoryResponseRest = new CategoryResponseRest();
-        categoryResponseRest.setMetadata("Error", "01", "Error al consultar categoria por id");
+    private Category createCategory(
+            Long id,
+            String name,
+            String description) {
 
-        when(service.searchById(id)).thenReturn(
-                new ResponseEntity<CategoryResponseRest>(categoryResponseRest, HttpStatus.INTERNAL_SERVER_ERROR));
-
-        // When
-        this.mockMvc.perform(get("/api/v1/categories/{id}", id)
-            // Then
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.metadata").exists())
-                .andExpect(status().isInternalServerError());
-    }
-
-    /**
-     * Test para guardar una categoria
-     */
-    @Test
-    void testSaveCategory() throws Exception {
-        // Given
-        Category category = new Category();
-        category.setId(3L);
-        category.setName("Bebidas");
-        category.setDescription("Distintos tipos de bebidas");
-
-        CategoryResponseRest categoryResponseRest = new CategoryResponseRest();
-        categoryResponseRest.getCategoryResponse().setCategory(List.of(category));
-        categoryResponseRest.setMetadata("Respuesta ok", "00", "Categoria guardada exitosamente");
-
-        when(service.save(category)).thenReturn(
-                new ResponseEntity<CategoryResponseRest>(categoryResponseRest, HttpStatus.OK));
-
-        // When
-        this.mockMvc.perform(post("/api/v1/categories")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(category))
-                .accept(MediaType.APPLICATION_JSON))
-                // Then
-                .andExpect(jsonPath("$.categoryResponse").exists())
-                .andExpect(jsonPath("$.categoryResponse.category[0].name").value("Bebidas"))
-                .andExpect(status().isOk());
-    }
-
-    /**
-     * Test para probar error al guardar una categoria
-     */
-    @Test
-    void testSaveCategoryError() throws Exception {
-        // Given
-        Category category = new Category();
-        category.setId(3L);
-        category.setName("Bebidas");
-        category.setDescription("Distintos tipos de bebidas");
-
-        CategoryResponseRest categoryResponseRest = new CategoryResponseRest();
-        categoryResponseRest.setMetadata("Error", "01", "Error al guardar la categoria");
-
-        when(service.save(category)).thenReturn(
-                new ResponseEntity<CategoryResponseRest>(categoryResponseRest, HttpStatus.INTERNAL_SERVER_ERROR));
-
-        // When
-        this.mockMvc.perform(post("/api/v1/categories")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(category))
-                .accept(MediaType.APPLICATION_JSON))
-                // Then
-                .andExpect(jsonPath("$.metadata").exists())
-                .andExpect(status().isInternalServerError());
-    }
-
-    /**
-     * Test para actualizar una categoria
-     */
-    @Test
-    void testUpdateCategory() throws Exception {
-        // Given
-        Long id = 1L;
         Category category = new Category();
         category.setId(id);
-        category.setName("Abarrotes Actualizado");
-        category.setDescription("Descripcion actualizada");
+        category.setName(name);
+        category.setDescription(description);
 
-        CategoryResponseRest categoryResponseRest = new CategoryResponseRest();
-        categoryResponseRest.getCategoryResponse().setCategory(List.of(category));
-        categoryResponseRest.setMetadata("Respuesta ok", "00", "Categoria actualizada exitosamente");
-
-        when(service.update(category, id)).thenReturn(
-                new ResponseEntity<CategoryResponseRest>(categoryResponseRest, HttpStatus.OK));
-
-        // When
-        this.mockMvc.perform(put("/api/v1/categories/{id}", id)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(category))
-                .accept(MediaType.APPLICATION_JSON))
-                // Then
-                .andExpect(jsonPath("$.categoryResponse").exists())
-                .andExpect(jsonPath("$.categoryResponse.category[0].name").value("Abarrotes Actualizado"))
-                .andExpect(status().isOk());
+        return category;
     }
 
-    /**
-     * Test para probar error al actualizar una categoria
-     */
-    @Test
-    void testUpdateCategoryError() throws Exception {
-        // Given
-        Long id = 1L;
-        Category category = new Category();
-        category.setId(id);
-        category.setName("Abarrotes Actualizado");
-        category.setDescription("Descripcion actualizada");
+    private CategoryResponseRest responseWith(
+            List<Category> categories) {
 
-        CategoryResponseRest categoryResponseRest = new CategoryResponseRest();
-        categoryResponseRest.setMetadata("Error", "01", "Error al actualizar la categoria");
+        CategoryResponseRest response =
+                new CategoryResponseRest();
 
-        when(service.update(category, id)).thenReturn(
-                new ResponseEntity<CategoryResponseRest>(categoryResponseRest, HttpStatus.INTERNAL_SERVER_ERROR));
+        response.getCategoryResponse()
+                .setCategory(categories);
 
-        // When
-        this.mockMvc.perform(put("/api/v1/categories/{id}", id)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(category))
-                .accept(MediaType.APPLICATION_JSON))
-                // Then
-                .andExpect(jsonPath("$.metadata").exists())
-                .andExpect(status().isInternalServerError());
-    }
-
-    /**
-     * Test para eliminar una categoria
-     */
-    @Test
-    void testDeleteCategory() throws Exception {
-        // Given
-        Long id = 1L;
-        CategoryResponseRest categoryResponseRest = new CategoryResponseRest();
-        categoryResponseRest.setMetadata("Respuesta ok", "00", "Categoria eliminada exitosamente");
-
-        when(service.deleteById(id)).thenReturn(
-                new ResponseEntity<CategoryResponseRest>(categoryResponseRest, HttpStatus.OK));
-
-        // When
-        this.mockMvc.perform(delete("/api/v1/categories/{id}", id)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON))
-                // Then
-                .andExpect(jsonPath("$.metadata").exists())
-                .andExpect(status().isOk());
-    }
-
-    /**
-     * Test para probar error al eliminar una categoria
-     */
-    @Test
-    void testDeleteCategoryError() throws Exception {
-        // Given
-        Long id = 1L;
-        CategoryResponseRest categoryResponseRest = new CategoryResponseRest();
-        categoryResponseRest.setMetadata("Error", "01", "Error al eliminar la categoria");
-
-        when(service.deleteById(id)).thenReturn(
-                new ResponseEntity<CategoryResponseRest>(categoryResponseRest, HttpStatus.INTERNAL_SERVER_ERROR));
-
-        // When
-        this.mockMvc.perform(delete("/api/v1/categories/{id}", id)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON))
-                // Then
-                .andExpect(jsonPath("$.metadata").exists())
-                .andExpect(status().isInternalServerError());
-    }
-
-
-    /**
-     * Método que agrega datos a la lista de categorias
-     */
-    public void chargeList() {
-        Category category = new Category();
-        category.setId(1L);
-        category.setName("Abarrotes");
-        category.setDescription("Distintos tipos de abarrotes");
-        list.add(category);
-
-        category = new Category();
-        category.setId(2L);
-        category.setName("Lacteos");
-        category.setDescription("Distintos tipos de lacteos");
-        list.add(category);
+        return response;
     }
 }
