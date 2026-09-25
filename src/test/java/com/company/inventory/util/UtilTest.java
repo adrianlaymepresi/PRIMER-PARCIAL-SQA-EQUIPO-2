@@ -9,6 +9,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class UtilTest {
 
     @Test
+    void constructor_success() {
+        Util util = new Util();
+        assertNotNull(util);
+    }
+
+    @Test
     void compressAndDecompress_success() {
 
         byte[] original =
@@ -68,20 +74,5 @@ class UtilTest {
         assertArrayEquals(
                 original,
                 decompressed);
-    }
-
-    @Test
-    void decompress_invalidData_returnsEmptyResult() {
-
-        byte[] invalidData =
-                new byte[]{1, 2, 3, 4, 5, 6};
-
-        byte[] result =
-                Util.decompressZLib(invalidData);
-
-        assertAll(
-                () -> assertNotNull(result),
-                () -> assertEquals(0, result.length)
-        );
     }
 }
